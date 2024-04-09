@@ -10,6 +10,11 @@ class Appointment:
     def __init__(self):
         self.service_id = None
         self.specialist_id = None
+        self.specialist_name = None
+        self.service_name = None
+
+    def __str__(self):
+        return f"{self.service_name} - {self.specialist_name}"
 
 
 class Command(BaseCommand):
@@ -23,6 +28,7 @@ class Command(BaseCommand):
         await update.message.reply_text('Оберіть стать:', reply_markup=reply_markup)
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        context.user_data['appointment'] = Appointment()
         await self.show_menu(update, context)
 
     async def callback_query_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -44,39 +50,52 @@ class Command(BaseCommand):
             await self.list_services(update, context, chat_id)
         elif data == "specialists":
             await self.list_specialists(update, context, chat_id)
-        elif data.startswith("service_"):
-            service_id = data.split('_')[1]
-            service = await sync_to_async(Service.objects.get)(id=service_id)
-            appointment.service_id = service_id
-            keyboard = [
-                [InlineKeyboardButton(f"Послуга: {service.name}", callback_data=f"selected_service_{service.id}")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_text(text="Ви обрали послугу:", reply_markup=reply_markup)
+        elif data.startswith("selected_service_") or data.startswith("service_"):
+            if data.startswith("service_"):
+                service_id = data.split('_')[1]
+                service = await sync_to_async(Service.objects.get)(id=service_id)
+                appointment.service_id = service_id
+                appointment.service_name = service.name
+            await self.show_main_options_with_selection(update, context, chat_id, appointment)
+        elif data.startswith("selected_specialist_") or data.startswith("specialist_"):
+            if data.startswith("specialist_"):
+                specialist_id = data.split('_')[1]
+                specialist = await sync_to_async(Specialist.objects.get)(id=specialist_id)
+                appointment.specialist_id = specialist_id
+                appointment.specialist_name = specialist.name
+            await self.show_main_options_with_selection(update, context, chat_id, appointment)
 
-        elif data.startswith("specialist_"):
-            specialist_id = data.split('_')[1]
-            specialist = await sync_to_async(Specialist.objects.get)(id=specialist_id)
-            appointment.specialist_id = specialist_id
-            keyboard = [[InlineKeyboardButton(f"Спеціаліст: {specialist.name}",
-                                              callback_data=f"selected_specialist_{specialist.id}")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_text(text="Ви обрали спеціаліста:", reply_markup=reply_markup)
+        print(f"APPOINTMENT: {context.user_data['appointment']}")
+
+    async def show_main_options_with_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, appointment: Appointment):
+        service_text = "Послуги" if not appointment.service_name else f"Послуга: {appointment.service_name}"
+        specialist_text = "Спеціалісти" if not appointment.specialist_name else f"Спеціаліст: {appointment.specialist_name}"
+
+        buttons = [
+            [InlineKeyboardButton("Дата та час", callback_data="date_time")],
+            [InlineKeyboardButton(service_text, callback_data="services")],
+            [InlineKeyboardButton(specialist_text, callback_data="specialists")]
+        ]
+        reply_markup = InlineKeyboardMarkup(buttons)
+        await context.bot.send_message(chat_id=chat_id, text="Оберіть опцію:", reply_markup=reply_markup)
 
     async def show_main_options(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> None:
-        keyboard = [
-            [InlineKeyboardButton("Оберіть дату та час", callback_data="date_time")],
-            [InlineKeyboardButton("Оберіть послуги", callback_data="services")],
-            [InlineKeyboardButton("Оберіть спеціаліста", callback_data="specialists")]
+        buttons = [
+            [InlineKeyboardButton("Дата та час", callback_data="date_time")],
+            [InlineKeyboardButton("Послуги", callback_data="services")],
+            [InlineKeyboardButton("Спеціалісти", callback_data="specialists")]
         ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await context.bot.send_message(chat_id=chat_id, text="Please select an option:", reply_markup=reply_markup)
+        reply_markup = InlineKeyboardMarkup(buttons)
+        await context.bot.send_message(chat_id=chat_id, text="Оберіть опцію:", reply_markup=reply_markup)
 
     async def services_men(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        context.user_data['gender'] = "men"
+        context.user_data['appointment'] = Appointment()
+        context.user_data['appointment'].gender = "men"
         await self.show_main_options(update, context, update.message.chat_id)
 
     async def services_women(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        context.user_data['gender'] = "women"
+        context.user_data['appointment'] = Appointment()
+        context.user_data['appointment'].gender = "women"
         await self.show_main_options(update, context, update.message.chat_id)
 
     async def list_services(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int = None) -> None:
