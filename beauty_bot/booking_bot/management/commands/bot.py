@@ -1,9 +1,12 @@
+from calendar import monthrange
+
 from django.core.management.base import BaseCommand
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 from django.conf import settings
 from booking_bot.models import Service, Specialist
 from asgiref.sync import sync_to_async
+from datetime import datetime
 
 
 class Appointment:
@@ -12,9 +15,10 @@ class Appointment:
         self.specialist_id = None
         self.specialist_name = None
         self.service_name = None
+        self.date = None
 
     def __str__(self):
-        return f"{self.service_name} - {self.specialist_name}"
+        return f"{self.service_name} - {self.specialist_name} - {self.date}"
 
 
 class Command(BaseCommand):
@@ -31,6 +35,43 @@ class Command(BaseCommand):
         context.user_data['appointment'] = Appointment()
         await self.show_menu(update, context)
 
+    async def show_date_picker(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, year: int = None,
+                               month: int = None) -> None:
+        now = datetime.now()
+        if year is None or month is None:
+            year, month = now.year, now.month
+        last_day = monthrange(year, month)[1]
+
+        month_name = datetime(year, month, 1).strftime('%B')
+        days_buttons = []
+        for day in range(1, last_day + 1):
+            date = datetime(year, month, day)
+            if date < now.replace(hour=0, minute=0, second=0, microsecond=0):
+                button = InlineKeyboardButton(" ", callback_data="ignore")
+            else:
+                button = InlineKeyboardButton(str(day), callback_data=f"date_{year}_{month}_{day}")
+            days_buttons.append(button)
+
+        keyboard = [days_buttons[i:i + 7] for i in range(0, len(days_buttons), 7)]
+
+        prev_month = month - 1 if month > 1 else 12
+        prev_year = year if month > 1 else year - 1
+        next_month = month + 1 if month < 12 else 1
+        next_year = year if month < 12 else year + 1
+
+        keyboard.insert(0, [InlineKeyboardButton(month_name, callback_data="ignore")])
+        keyboard.append([
+            InlineKeyboardButton("<", callback_data=f"change_month_{prev_year}_{prev_month}"),
+            InlineKeyboardButton(">", callback_data=f"change_month_{next_year}_{next_month}")
+        ])
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        if update.callback_query:
+            await update.callback_query.edit_message_text(text="Оберіть дату:", reply_markup=reply_markup)
+        else:
+            await context.bot.send_message(chat_id=chat_id, text="Оберіть дату:", reply_markup=reply_markup)
+
     async def callback_query_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         await query.answer()
@@ -43,7 +84,25 @@ class Command(BaseCommand):
 
         appointment = context.user_data['appointment']
 
-        if data.startswith("gender_"):
+        if data == "date_time":
+            await self.show_date_picker(update, context, chat_id)
+        elif data.startswith("change_month_"):
+            _a, _b, year, month = data.split('_')
+            try:
+                year = int(year)
+                month = int(month)
+                await self.show_date_picker(update, context, chat_id, year, month)
+            except ValueError:
+                print(f"Invalid year or month in callback data: {year}, {month}")
+        elif data.startswith("date_"):
+            parts = data.split('_')
+            if len(parts) == 4:
+                _, year, month, day = parts
+                selected_date = datetime(int(year), int(month), int(day))
+                appointment.date = selected_date.strftime('%Y-%m-%d')
+                await self.show_main_options_with_selection(update, context, chat_id, appointment)
+
+        elif data.startswith("gender_"):
             context.user_data['gender'] = "men" if data == "gender_men" else "women"
             await self.show_main_options(update, context, chat_id)
         elif data == "services":
@@ -67,17 +126,23 @@ class Command(BaseCommand):
 
         print(f"APPOINTMENT: {context.user_data['appointment']}")
 
-    async def show_main_options_with_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, appointment: Appointment):
-        service_text = "Послуги" if not appointment.service_name else f"Послуга: {appointment.service_name}"
-        specialist_text = "Спеціалісти" if not appointment.specialist_name else f"Спеціаліст: {appointment.specialist_name}"
+    async def show_main_options_with_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int,
+                                               appointment: Appointment):
+        date_text = f"Дата: {appointment.date}" if appointment.date else "Дата та час"
+        service_text = f"Послуга: {appointment.service_name}" if appointment.service_name else "Послуги"
+        specialist_text = f"Спеціаліст: {appointment.specialist_name}" if appointment.specialist_name else "Спеціалісти"
 
         buttons = [
-            [InlineKeyboardButton("Дата та час", callback_data="date_time")],
+            [InlineKeyboardButton(date_text, callback_data="date_time")],
             [InlineKeyboardButton(service_text, callback_data="services")],
             [InlineKeyboardButton(specialist_text, callback_data="specialists")]
         ]
         reply_markup = InlineKeyboardMarkup(buttons)
-        await context.bot.send_message(chat_id=chat_id, text="Оберіть опцію:", reply_markup=reply_markup)
+
+        if update.callback_query:
+            await update.callback_query.edit_message_text(text="Оберіть опцію:", reply_markup=reply_markup)
+        else:
+            await context.bot.send_message(chat_id=chat_id, text="Оберіть опцію:", reply_markup=reply_markup)
 
     async def show_main_options(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> None:
         buttons = [
