@@ -28,6 +28,7 @@ DEBUG = True
 ALLOWED_HOSTS = []
 
 TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN')
+GOOGLE_SHEET_ID = config('GOOGLE_SHEET_ID')
 
 # Application definition
 

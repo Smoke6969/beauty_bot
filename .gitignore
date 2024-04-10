@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+/beauty_bot/secrets/google-sheets-api.json
+
+
 # C extensions
 *.so
 

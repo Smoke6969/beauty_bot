@@ -7,6 +7,7 @@ from django.conf import settings
 from booking_bot.models import Service, Specialist
 from asgiref.sync import sync_to_async
 from datetime import datetime
+from booking_bot.utils.google_sheets import get_available_dates, get_sheet_service
 
 
 class Appointment:
@@ -19,6 +20,9 @@ class Appointment:
 
     def __str__(self):
         return f"{self.service_name} - {self.specialist_name} - {self.date}"
+
+
+sheet_service = get_sheet_service()
 
 
 class Command(BaseCommand):
@@ -36,24 +40,35 @@ class Command(BaseCommand):
         await self.show_menu(update, context)
 
     async def show_date_picker(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, year: int = None,
-                               month: int = None) -> None:
+                               month: int = None):
         now = datetime.now()
+        # Set current year and month if not provided
         if year is None or month is None:
-            year, month = now.year, now.month
+            year = now.year
+            month = now.month
+
+        # Define the last day of the month for the calendar
         last_day = monthrange(year, month)[1]
+
+        # Fetch available dates from the sheet
+        available_dates = get_available_dates(sheet_service)
+        available_dates = [datetime.strptime(date, '%d/%m/%Y') for date in available_dates]
+        available_dates = [date for date in available_dates if date >= now.replace(hour=0, minute=0, second=0,
+                                                                                   microsecond=0) and date.year == year and date.month == month]
 
         month_name = datetime(year, month, 1).strftime('%B')
         days_buttons = []
         for day in range(1, last_day + 1):
             date = datetime(year, month, day)
-            if date < now.replace(hour=0, minute=0, second=0, microsecond=0):
-                button = InlineKeyboardButton(" ", callback_data="ignore")
-            else:
+            if date in available_dates:
                 button = InlineKeyboardButton(str(day), callback_data=f"date_{year}_{month}_{day}")
+            else:
+                button = InlineKeyboardButton(" ", callback_data="ignore")
             days_buttons.append(button)
 
         keyboard = [days_buttons[i:i + 7] for i in range(0, len(days_buttons), 7)]
 
+        # Handling month navigation
         prev_month = month - 1 if month > 1 else 12
         prev_year = year if month > 1 else year - 1
         next_month = month + 1 if month < 12 else 1
@@ -87,13 +102,13 @@ class Command(BaseCommand):
         if data == "date_time":
             await self.show_date_picker(update, context, chat_id)
         elif data.startswith("change_month_"):
-            _a, _b, year, month = data.split('_')
-            try:
-                year = int(year)
-                month = int(month)
-                await self.show_date_picker(update, context, chat_id, year, month)
-            except ValueError:
-                print(f"Invalid year or month in callback data: {year}, {month}")
+            parts = data.split('_')
+            new_year = parts[2]
+            new_month = parts[3]
+            print(new_year)
+            print(new_month)
+            await self.show_date_picker(update, context, chat_id, int(new_year), int(new_month))
+
         elif data.startswith("date_"):
             parts = data.split('_')
             if len(parts) == 4:
