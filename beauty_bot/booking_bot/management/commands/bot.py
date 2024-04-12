@@ -1,5 +1,3 @@
-from calendar import monthrange
-
 from django.core.management.base import BaseCommand
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
@@ -7,7 +5,7 @@ from django.conf import settings
 from booking_bot.models import Service, Specialist
 from asgiref.sync import sync_to_async
 from datetime import datetime
-from booking_bot.utils.google_sheets import get_available_dates
+from booking_bot.utils.calendar_utils import show_date_picker
 
 
 class Appointment:
@@ -36,50 +34,6 @@ class Command(BaseCommand):
         context.user_data['appointment'] = Appointment()
         await self.show_menu(update, context)
 
-    async def show_date_picker(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, year: int = None,
-                               month: int = None):
-        now = datetime.now()
-        if year is None or month is None:
-            year = now.year
-            month = now.month
-
-        last_day = monthrange(year, month)[1]
-
-        available_dates = get_available_dates()
-        available_dates = [datetime.strptime(date, '%d/%m/%Y') for date in available_dates]
-        available_dates = [date for date in available_dates if date >= now.replace(hour=0, minute=0, second=0,
-                                                                                   microsecond=0) and date.year == year and date.month == month]
-
-        month_name = datetime(year, month, 1).strftime('%B')
-        days_buttons = []
-        for day in range(1, last_day + 1):
-            date = datetime(year, month, day)
-            if date in available_dates:
-                button = InlineKeyboardButton(str(day), callback_data=f"date_{year}_{month}_{day}")
-            else:
-                button = InlineKeyboardButton(" ", callback_data="ignore")
-            days_buttons.append(button)
-
-        keyboard = [days_buttons[i:i + 7] for i in range(0, len(days_buttons), 7)]
-
-        prev_month = month - 1 if month > 1 else 12
-        prev_year = year if month > 1 else year - 1
-        next_month = month + 1 if month < 12 else 1
-        next_year = year if month < 12 else year + 1
-
-        keyboard.insert(0, [InlineKeyboardButton(month_name, callback_data="ignore")])
-        keyboard.append([
-            InlineKeyboardButton("<", callback_data=f"change_month_{prev_year}_{prev_month}"),
-            InlineKeyboardButton(">", callback_data=f"change_month_{next_year}_{next_month}")
-        ])
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        if update.callback_query:
-            await update.callback_query.edit_message_text(text="Оберіть дату:", reply_markup=reply_markup)
-        else:
-            await context.bot.send_message(chat_id=chat_id, text="Оберіть дату:", reply_markup=reply_markup)
-
     async def callback_query_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         await query.answer()
@@ -97,12 +51,12 @@ class Command(BaseCommand):
             await self.show_main_options(update, context, chat_id)
 
         elif data == "dates":
-            await self.show_date_picker(update, context, chat_id)
+            await show_date_picker(update, context, chat_id)
         elif data.startswith("change_month_"):
             parts = data.split('_')
             new_year = parts[2]
             new_month = parts[3]
-            await self.show_date_picker(update, context, chat_id, int(new_year), int(new_month))
+            await show_date_picker(update, context, chat_id, int(new_year), int(new_month))
         elif data.startswith("date_"):
             parts = data.split('_')
             if len(parts) == 4:
