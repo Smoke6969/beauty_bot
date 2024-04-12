@@ -7,7 +7,7 @@ from django.conf import settings
 from booking_bot.models import Service, Specialist
 from asgiref.sync import sync_to_async
 from datetime import datetime
-from booking_bot.utils.google_sheets import get_available_dates, get_sheet_service
+from booking_bot.utils.google_sheets import get_available_dates
 
 
 class Appointment:
@@ -20,9 +20,6 @@ class Appointment:
 
     def __str__(self):
         return f"{self.service_name} - {self.specialist_name} - {self.date}"
-
-
-sheet_service = get_sheet_service()
 
 
 class Command(BaseCommand):
@@ -42,16 +39,13 @@ class Command(BaseCommand):
     async def show_date_picker(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, year: int = None,
                                month: int = None):
         now = datetime.now()
-        # Set current year and month if not provided
         if year is None or month is None:
             year = now.year
             month = now.month
 
-        # Define the last day of the month for the calendar
         last_day = monthrange(year, month)[1]
 
-        # Fetch available dates from the sheet
-        available_dates = get_available_dates(sheet_service)
+        available_dates = get_available_dates()
         available_dates = [datetime.strptime(date, '%d/%m/%Y') for date in available_dates]
         available_dates = [date for date in available_dates if date >= now.replace(hour=0, minute=0, second=0,
                                                                                    microsecond=0) and date.year == year and date.month == month]
@@ -68,7 +62,6 @@ class Command(BaseCommand):
 
         keyboard = [days_buttons[i:i + 7] for i in range(0, len(days_buttons), 7)]
 
-        # Handling month navigation
         prev_month = month - 1 if month > 1 else 12
         prev_year = year if month > 1 else year - 1
         next_month = month + 1 if month < 12 else 1
@@ -99,16 +92,17 @@ class Command(BaseCommand):
 
         appointment = context.user_data['appointment']
 
-        if data == "date_time":
+        if data.startswith("gender_"):
+            context.user_data['gender'] = "men" if data == "gender_men" else "women"
+            await self.show_main_options(update, context, chat_id)
+
+        elif data == "dates":
             await self.show_date_picker(update, context, chat_id)
         elif data.startswith("change_month_"):
             parts = data.split('_')
             new_year = parts[2]
             new_month = parts[3]
-            print(new_year)
-            print(new_month)
             await self.show_date_picker(update, context, chat_id, int(new_year), int(new_month))
-
         elif data.startswith("date_"):
             parts = data.split('_')
             if len(parts) == 4:
@@ -117,13 +111,8 @@ class Command(BaseCommand):
                 appointment.date = selected_date.strftime('%Y-%m-%d')
                 await self.show_main_options_with_selection(update, context, chat_id, appointment)
 
-        elif data.startswith("gender_"):
-            context.user_data['gender'] = "men" if data == "gender_men" else "women"
-            await self.show_main_options(update, context, chat_id)
         elif data == "services":
             await self.list_services(update, context, chat_id)
-        elif data == "specialists":
-            await self.list_specialists(update, context, chat_id)
         elif data.startswith("selected_service_") or data.startswith("service_"):
             if data.startswith("service_"):
                 service_id = data.split('_')[1]
@@ -131,6 +120,9 @@ class Command(BaseCommand):
                 appointment.service_id = service_id
                 appointment.service_name = service.name
             await self.show_main_options_with_selection(update, context, chat_id, appointment)
+
+        elif data == "specialists":
+            await self.list_specialists(update, context, chat_id)
         elif data.startswith("selected_specialist_") or data.startswith("specialist_"):
             if data.startswith("specialist_"):
                 specialist_id = data.split('_')[1]
@@ -148,7 +140,7 @@ class Command(BaseCommand):
         specialist_text = f"Спеціаліст: {appointment.specialist_name}" if appointment.specialist_name else "Спеціалісти"
 
         buttons = [
-            [InlineKeyboardButton(date_text, callback_data="date_time")],
+            [InlineKeyboardButton(date_text, callback_data="dates")],
             [InlineKeyboardButton(service_text, callback_data="services")],
             [InlineKeyboardButton(specialist_text, callback_data="specialists")]
         ]
@@ -161,7 +153,7 @@ class Command(BaseCommand):
 
     async def show_main_options(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> None:
         buttons = [
-            [InlineKeyboardButton("Дата та час", callback_data="date_time")],
+            [InlineKeyboardButton("Дата та час", callback_data="dates")],
             [InlineKeyboardButton("Послуги", callback_data="services")],
             [InlineKeyboardButton("Спеціалісти", callback_data="specialists")]
         ]
