@@ -28,17 +28,16 @@ def refresh_cache(sheet_service):
 
     all_data = {}
     for sheet_name in sheet_names:
-        range_name = f'{sheet_name}!A2:A'
+        range_name = f'{sheet_name}!A2:I'
         result = sheet_service.spreadsheets().values().get(
             spreadsheetId=settings.GOOGLE_SHEET_ID,
             range=range_name
         ).execute()
-        all_data[sheet_name] = [item[0] for item in result.get('values', []) if item]
+        rows = result.get('values', [])
+        filtered_dates = [row[0] for row in rows if any(cell.lower() == 'x' for cell in row[1:])]
+        all_data[sheet_name] = filtered_dates
 
-    cache.update({
-        'last_update': datetime.datetime.now(),
-        'data': all_data
-    })
+    cache.update({'last_update': datetime.datetime.now(), 'data': all_data})
     last_cache_update = datetime.datetime.now()
 
 
@@ -55,3 +54,4 @@ def get_available_dates():
     data = get_cached_data()
     first_sheet_name = next(iter(data.keys()))
     return data.get(first_sheet_name, [])
+
