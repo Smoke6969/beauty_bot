@@ -6,18 +6,7 @@ from booking_bot.models import Service, Specialist
 from asgiref.sync import sync_to_async
 from datetime import datetime
 from booking_bot.utils.calendar_utils import show_date_picker
-
-
-class Appointment:
-    def __init__(self):
-        self.service_id = None
-        self.specialist_id = None
-        self.specialist_name = None
-        self.service_name = None
-        self.date = None
-
-    def __str__(self):
-        return f"{self.service_name} - {self.specialist_name} - {self.date}"
+from booking_bot.utils.common import SessionAppointment
 
 
 class Command(BaseCommand):
@@ -31,7 +20,7 @@ class Command(BaseCommand):
         await update.message.reply_text('Оберіть стать:', reply_markup=reply_markup)
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        context.user_data['appointment'] = Appointment()
+        context.user_data['appointment'] = SessionAppointment()
         await self.show_menu(update, context)
 
     async def callback_query_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -42,7 +31,7 @@ class Command(BaseCommand):
         chat_id = query.message.chat_id
 
         if 'appointment' not in context.user_data:
-            context.user_data['appointment'] = Appointment()
+            context.user_data['appointment'] = SessionAppointment()
 
         appointment = context.user_data['appointment']
 
@@ -51,12 +40,12 @@ class Command(BaseCommand):
             await self.show_main_options(update, context, chat_id)
 
         elif data == "dates":
-            await show_date_picker(update, context, chat_id)
+            await show_date_picker(update, context, chat_id, appointment=appointment)
         elif data.startswith("change_month_"):
             parts = data.split('_')
             new_year = parts[2]
             new_month = parts[3]
-            await show_date_picker(update, context, chat_id, int(new_year), int(new_month))
+            await show_date_picker(update, context, chat_id, int(new_year), int(new_month), appointment=appointment)
         elif data.startswith("date_"):
             parts = data.split('_')
             if len(parts) == 4:
@@ -88,7 +77,7 @@ class Command(BaseCommand):
         print(f"APPOINTMENT: {context.user_data['appointment']}")
 
     async def show_main_options_with_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int,
-                                               appointment: Appointment):
+                                               appointment: SessionAppointment):
         date_text = f"Дата: {appointment.date}" if appointment.date else "Дата та час"
         service_text = f"Послуга: {appointment.service_name}" if appointment.service_name else "Послуги"
         specialist_text = f"Спеціаліст: {appointment.specialist_name}" if appointment.specialist_name else "Спеціалісти"
@@ -115,12 +104,12 @@ class Command(BaseCommand):
         await context.bot.send_message(chat_id=chat_id, text="Оберіть опцію:", reply_markup=reply_markup)
 
     async def services_men(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        context.user_data['appointment'] = Appointment()
+        context.user_data['appointment'] = SessionAppointment()
         context.user_data['appointment'].gender = "men"
         await self.show_main_options(update, context, update.message.chat_id)
 
     async def services_women(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        context.user_data['appointment'] = Appointment()
+        context.user_data['appointment'] = SessionAppointment()
         context.user_data['appointment'].gender = "women"
         await self.show_main_options(update, context, update.message.chat_id)
 

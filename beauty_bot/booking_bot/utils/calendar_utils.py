@@ -2,11 +2,13 @@ from calendar import monthrange
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from datetime import datetime
+
+from booking_bot.utils.common import SessionAppointment
 from booking_bot.utils.google_sheets import get_available_dates
 
 
 async def show_date_picker(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, year: int = None,
-                           month: int = None):
+                           month: int = None, appointment: SessionAppointment = None):
     now = datetime.now()
     if year is None or month is None:
         year = now.year
@@ -18,7 +20,7 @@ async def show_date_picker(update: Update, context: ContextTypes.DEFAULT_TYPE, c
     month_name = month_names[month - 1]
     days_of_week = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"]
 
-    available_dates = get_available_dates()
+    available_dates = get_available_dates(appointment)
     available_dates = [datetime.strptime(date, '%d/%m/%Y') for date in available_dates]
     available_dates = [date for date in available_dates if
                        date.year == year and date.month == month and date >= now.replace(hour=0, minute=0, second=0,

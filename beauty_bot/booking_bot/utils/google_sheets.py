@@ -2,10 +2,11 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from django.conf import settings
 import datetime
+from booking_bot.utils.common import SessionAppointment
 
 # Cache setup
 cache = {}
-cache_timeout = datetime.timedelta(minutes=1)  # Cache expires after 1 minute
+cache_timeout = datetime.timedelta(minutes=3)  # Cache expiration in minutes
 last_cache_update = datetime.datetime.min
 
 
@@ -50,8 +51,14 @@ def get_cached_data():
     return cache['data']
 
 
-def get_available_dates():
+def get_available_dates(appointment: SessionAppointment):
     data = get_cached_data()
-    first_sheet_name = next(iter(data.keys()))
-    return data.get(first_sheet_name, [])
+    if appointment.specialist_name:
+        return data.get(appointment.specialist_name, [])
+    else:
+        all_dates = set()
+        for sheet_dates in data.values():
+            all_dates.update(sheet_dates)
+        return list(all_dates)
+
 
