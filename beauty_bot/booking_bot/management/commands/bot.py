@@ -7,6 +7,7 @@ from asgiref.sync import sync_to_async
 from datetime import datetime
 from booking_bot.utils.calendar_utils import show_date_picker
 from booking_bot.utils.common import SessionAppointment
+from booking_bot.utils.google_sheets import get_available_timeslots
 
 
 class Command(BaseCommand):
@@ -52,6 +53,11 @@ class Command(BaseCommand):
                 _, year, month, day = parts
                 selected_date = datetime(int(year), int(month), int(day))
                 appointment.date = selected_date.strftime('%Y-%m-%d')
+
+                print(f"Appointment: {appointment}")
+                available_timeslots = get_available_timeslots(appointment, appointment.date)
+                print(f"Available timeslots on {appointment.date} for {appointment.specialist_name if appointment.specialist_name else 'all specialists'}: {available_timeslots}")
+
                 await self.show_main_options_with_selection(update, context, chat_id, appointment)
 
         elif data == "services":
