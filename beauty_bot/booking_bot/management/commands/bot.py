@@ -108,12 +108,22 @@ class Command(BaseCommand):
             [InlineKeyboardButton(service_text, callback_data="services")],
             [InlineKeyboardButton(specialist_text, callback_data="specialists")]
         ]
+
+        message_text = "Оберіть опцію:"
+
+        if appointment.date and appointment.service_name and appointment.specialist_name:
+            summary_text = f"\n\nДата: {locale_date}\nЧас: {appointment.timeslot}\nПослуга: {appointment.service_name}\nСпеціаліст: {appointment.specialist_name}"
+            confirm_button = [InlineKeyboardButton("Підтвердити запис", callback_data="confirm_appointment")]
+
+            message_text += summary_text
+            buttons.append(confirm_button)
+
         reply_markup = InlineKeyboardMarkup(buttons)
 
         if update.callback_query:
-            await update.callback_query.edit_message_text(text="Оберіть опцію:", reply_markup=reply_markup)
+            await update.callback_query.edit_message_text(text=message_text, reply_markup=reply_markup)
         else:
-            await context.bot.send_message(chat_id=chat_id, text="Оберіть опцію:", reply_markup=reply_markup)
+            await context.bot.send_message(chat_id=chat_id, text=message_text, reply_markup=reply_markup)
 
     async def show_main_options(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> None:
         buttons = [
