@@ -89,6 +89,9 @@ class Command(BaseCommand):
                 appointment.specialist_name = specialist.name
             await self.show_main_options_with_selection(update, context, chat_id, appointment)
 
+        elif data.startswith("confirm_appointment"):
+            print("APPOINTMENT CONFIRMED!!!")
+
         print(f"APPOINTMENT: {context.user_data['appointment']}")
 
     async def show_main_options_with_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int,
