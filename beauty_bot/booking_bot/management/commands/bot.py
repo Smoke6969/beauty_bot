@@ -7,7 +7,7 @@ from asgiref.sync import sync_to_async
 from datetime import datetime
 from booking_bot.utils.calendar_utils import show_date_picker
 from booking_bot.utils.common import SessionAppointment
-from booking_bot.utils.google_sheets import get_available_timeslots
+from booking_bot.utils.google_sheets import get_available_timeslots, get_cached_data
 
 
 class Command(BaseCommand):
@@ -69,7 +69,7 @@ class Command(BaseCommand):
             await self.show_main_options_with_selection(update, context, chat_id, appointment)
 
         elif data == "services":
-            await self.list_services(update, context, chat_id)
+            await self.list_services(update, context, chat_id, appointment)
         elif data.startswith("selected_service_") or data.startswith("service_"):
             if data.startswith("service_"):
                 service_id = data.split('_')[1]
@@ -79,7 +79,7 @@ class Command(BaseCommand):
             await self.show_main_options_with_selection(update, context, chat_id, appointment)
 
         elif data == "specialists":
-            await self.list_specialists(update, context, chat_id)
+            await self.list_specialists(update, context, chat_id, appointment)
         elif data.startswith("selected_specialist_") or data.startswith("specialist_"):
             if data.startswith("specialist_"):
                 specialist_id = data.split('_')[1]
@@ -92,7 +92,7 @@ class Command(BaseCommand):
 
     async def show_main_options_with_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int,
                                                appointment: SessionAppointment):
-        date_text = f"Дата та час: {appointment.date} {appointment.timeslot}" if appointment.date and appointment.timeslot else "Дата та час"
+        date_text = f"Коли: {appointment.date} [{appointment.timeslot}]" if appointment.date and appointment.timeslot else "Дата та час"
         service_text = f"Послуга: {appointment.service_name}" if appointment.service_name else "Послуги"
         specialist_text = f"Спеціаліст: {appointment.specialist_name}" if appointment.specialist_name else "Спеціалісти"
 
@@ -127,8 +127,26 @@ class Command(BaseCommand):
         context.user_data['appointment'].gender = "women"
         await self.show_main_options(update, context, update.message.chat_id)
 
-    async def list_services(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int = None) -> None:
-        services = await sync_to_async(list)(Service.objects.all())
+    async def list_services(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int = None,
+                            appointment: SessionAppointment = None) -> None:
+        if appointment.date and appointment.timeslot:
+            formatted_date = datetime.strptime(appointment.date, '%Y-%m-%d').strftime('%d/%m/%Y')
+            selected_timeslot = appointment.timeslot
+            data = get_cached_data()
+
+            available_specialists = []
+            for specialist, dates in data.items():
+                if formatted_date in dates and dates[formatted_date].get(selected_timeslot, False):
+                    available_specialists.append(specialist)
+
+            services_query = Service.objects.filter(specialists__name__in=available_specialists).distinct()
+            services = await sync_to_async(list)(services_query)
+            print(f"Available Services for {selected_timeslot} on {formatted_date}: {services}")
+
+        else:
+            services = await sync_to_async(list)(Service.objects.all())
+            print("No date/timeslot selected - Showing all services.")
+
         keyboard = [[InlineKeyboardButton(service.name, callback_data=f"service_{service.id}")] for service in services]
         reply_markup = InlineKeyboardMarkup(keyboard)
         text = 'Оберіть послугу:'
@@ -138,10 +156,48 @@ class Command(BaseCommand):
         else:
             await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup)
 
-    async def list_specialists(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int = None) -> None:
-        specialists = await sync_to_async(list)(Specialist.objects.all())
-        keyboard = [[InlineKeyboardButton(specialist.name, callback_data=f"specialist_{specialist.id}")] for specialist
-                    in specialists]
+    async def list_specialists(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int = None,
+                               appointment: SessionAppointment = None) -> None:
+        if appointment.service_id and not appointment.date:
+            service = await sync_to_async(Service.objects.get)(id=appointment.service_id)
+            specialists = await sync_to_async(list)(service.specialists.all())
+            print(f"Service ID: {appointment.service_id} - Found Specialists: {specialists}")
+
+        elif appointment.date and not appointment.service_id and appointment.timeslot:
+            formatted_date = datetime.strptime(appointment.date, '%Y-%m-%d').strftime('%d/%m/%Y')
+            selected_timeslot = appointment.timeslot
+            available_specialists = []
+            data = get_cached_data()
+
+            for specialist, dates in data.items():
+                if formatted_date in dates and dates[formatted_date].get(selected_timeslot, False):
+                    try:
+                        specialist_obj = await sync_to_async(Specialist.objects.get)(name=specialist)
+                        available_specialists.append(specialist_obj)
+                    except Specialist.DoesNotExist:
+                        continue
+            specialists = available_specialists
+            print(f"Date/Time Selected - Available Specialists: {specialists}")
+
+        elif appointment.date and appointment.service_id and appointment.timeslot:
+            service = await sync_to_async(Service.objects.get)(id=appointment.service_id)
+            formatted_date = datetime.strptime(appointment.date, '%Y-%m-%d').strftime('%d/%m/%Y')
+            selected_timeslot = appointment.timeslot
+            available_specialists = []
+            data = get_cached_data()
+
+            for specialist in await sync_to_async(list)(service.specialists.all()):
+                if specialist.name in data and formatted_date in data[specialist.name] and data[specialist.name][
+                    formatted_date].get(selected_timeslot, False):
+                    available_specialists.append(specialist)
+            specialists = available_specialists
+            print(f"Date, Service, and Timeslot Selected - Available Specialists: {specialists}")
+
+        else:
+            specialists = await sync_to_async(list)(Specialist.objects.all())
+            print("No specific filters applied - Showing all specialists.")
+
+        keyboard = [[InlineKeyboardButton(s.name, callback_data=f"specialist_{s.id}")] for s in specialists]
         reply_markup = InlineKeyboardMarkup(keyboard)
         text = 'Оберіть спеціаліста:'
 
