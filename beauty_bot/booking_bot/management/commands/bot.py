@@ -54,11 +54,19 @@ class Command(BaseCommand):
                 selected_date = datetime(int(year), int(month), int(day))
                 appointment.date = selected_date.strftime('%Y-%m-%d')
 
-                print(f"Appointment: {appointment}")
                 available_timeslots = get_available_timeslots(appointment, appointment.date)
-                print(f"Available timeslots on {appointment.date} for {appointment.specialist_name if appointment.specialist_name else 'all specialists'}: {available_timeslots}")
+                timeslot_buttons = [[InlineKeyboardButton(timeslot, callback_data=f"timeslot_{timeslot}")] for timeslot
+                                    in available_timeslots]
+                timeslot_markup = InlineKeyboardMarkup(timeslot_buttons)
 
-                await self.show_main_options_with_selection(update, context, chat_id, appointment)
+                if update.callback_query:
+                    await update.callback_query.edit_message_text(text="Оберіть час:", reply_markup=timeslot_markup)
+                else:
+                    await context.bot.send_message(chat_id=chat_id, text="Оберіть час:", reply_markup=timeslot_markup)
+        elif data.startswith("timeslot_"):
+            timeslot = data.split('_')[1]
+            appointment.timeslot = timeslot
+            await self.show_main_options_with_selection(update, context, chat_id, appointment)
 
         elif data == "services":
             await self.list_services(update, context, chat_id)
@@ -84,7 +92,7 @@ class Command(BaseCommand):
 
     async def show_main_options_with_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int,
                                                appointment: SessionAppointment):
-        date_text = f"Дата: {appointment.date}" if appointment.date else "Дата та час"
+        date_text = f"Дата та час: {appointment.date} {appointment.timeslot}" if appointment.date and appointment.timeslot else "Дата та час"
         service_text = f"Послуга: {appointment.service_name}" if appointment.service_name else "Послуги"
         specialist_text = f"Спеціаліст: {appointment.specialist_name}" if appointment.specialist_name else "Спеціалісти"
 

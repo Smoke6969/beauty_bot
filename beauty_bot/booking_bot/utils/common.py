@@ -5,6 +5,7 @@ class SessionAppointment:
         self.specialist_name = None
         self.service_name = None
         self.date = None
+        self.timeslot = None
 
     def __str__(self):
-        return f"{self.service_name} - {self.specialist_name} - {self.date}"
+        return f"{self.service_name} - {self.specialist_name} - {self.date} - {self.timeslot}"
