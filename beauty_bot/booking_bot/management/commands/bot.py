@@ -8,6 +8,7 @@ from datetime import datetime
 from booking_bot.utils.calendar_utils import show_date_picker
 from booking_bot.utils.common import SessionAppointment
 from booking_bot.utils.google_sheets import get_available_timeslots, get_cached_data
+from babel.dates import format_date
 
 
 class Command(BaseCommand):
@@ -92,7 +93,13 @@ class Command(BaseCommand):
 
     async def show_main_options_with_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int,
                                                appointment: SessionAppointment):
-        date_text = f"Коли: {appointment.date} [{appointment.timeslot}]" if appointment.date and appointment.timeslot else "Дата та час"
+        if appointment.date and appointment.timeslot:
+            formatted_date = datetime.strptime(appointment.date, '%Y-%m-%d')
+            locale_date = format_date(formatted_date, "d MMMM", locale='uk_UA')
+            date_text = f"Коли: {locale_date} [{appointment.timeslot}]"
+        else:
+            date_text = "Дата та час"
+
         service_text = f"Послуга: {appointment.service_name}" if appointment.service_name else "Послуги"
         specialist_text = f"Спеціаліст: {appointment.specialist_name}" if appointment.specialist_name else "Спеціалісти"
 
