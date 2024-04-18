@@ -7,7 +7,7 @@ from asgiref.sync import sync_to_async
 from datetime import datetime
 from booking_bot.utils.calendar_utils import show_date_picker
 from booking_bot.utils.common import SessionAppointment
-from booking_bot.utils.google_sheets import get_available_timeslots, get_cached_data
+from booking_bot.utils.google_sheets import get_available_timeslots, get_cached_data, set_booked_slots
 from babel.dates import format_date
 
 
@@ -91,6 +91,7 @@ class Command(BaseCommand):
 
         elif data.startswith("confirm_appointment"):
             print("APPOINTMENT CONFIRMED!!!")
+            set_booked_slots(appointment)
 
         print(f"APPOINTMENT: {context.user_data['appointment']}")
 

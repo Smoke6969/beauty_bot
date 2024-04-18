@@ -18,7 +18,7 @@ TIMESLOT_HEADERS = [
 def get_sheet_service():
     creds = Credentials.from_service_account_file(
         settings.BASE_DIR / 'secrets' / 'google-sheets-api.json',
-        scopes=['https://www.googleapis.com/auth/spreadsheets.readonly']
+        scopes=['https://www.googleapis.com/auth/spreadsheets']
     )
     service = build('sheets', 'v4', credentials=creds)
     return service
@@ -97,7 +97,43 @@ def get_available_timeslots(appointment, selected_date):
     return available_timeslots
 
 
+def set_booked_slots(appointment):
+    sheets_service = get_sheet_service()
+    spreadsheet_id = settings.GOOGLE_SHEET_ID
+    specialist_sheet_name = appointment.specialist_name.strip().replace(' ', '')
+    range_name = f"{specialist_sheet_name}!A1:Z100"
 
+    try:
+        result = sheets_service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
+        values = result.get('values', [])
 
+        if not values:
+            print("No data found.")
+            return
+
+        formatted_date = datetime.strptime(appointment.date, '%Y-%m-%d').strftime('%d/%m/%Y')
+        timeslot = appointment.timeslot
+
+        date_row_index = next((i for i, row in enumerate(values) if len(row) > 0 and row[0].strip() == formatted_date), None)
+        timeslot_col_index = TIMESLOT_HEADERS.index(timeslot) + 1
+
+        if date_row_index is None or timeslot_col_index is None:
+            print("Date or timeslot not found in the sheet.")
+            return
+
+        cell = f"{chr(65 + timeslot_col_index)}{date_row_index + 1}"  # Convert column index to letter
+        cell_range = f"{specialist_sheet_name}!{cell}"
+
+        body = {'values': [['booked']]}
+        update_response = sheets_service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range=cell_range,
+            valueInputOption="USER_ENTERED",
+            body=body
+        ).execute()
+
+        print(f"Updated {cell_range} on sheet {specialist_sheet_name} to 'booked'. Response: {update_response}")
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
 
 
