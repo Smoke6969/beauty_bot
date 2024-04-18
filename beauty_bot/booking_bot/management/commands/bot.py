@@ -1,12 +1,13 @@
 from django.core.management.base import BaseCommand
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, \
+    ReplyKeyboardRemove
+from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
 from django.conf import settings
 from booking_bot.models import Service, Specialist
 from asgiref.sync import sync_to_async
 from datetime import datetime
 from booking_bot.utils.calendar_utils import show_date_picker
-from booking_bot.utils.common import SessionAppointment
+from booking_bot.utils.common import SessionAppointment, SessionClient
 from booking_bot.utils.google_sheets import get_available_timeslots, get_cached_data, set_booked_slots
 from booking_bot.utils.google_calendar import create_calendar_event
 from babel.dates import format_date
@@ -14,17 +15,45 @@ from babel.dates import format_date
 
 class Command(BaseCommand):
 
-    async def show_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def request_contact(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         keyboard = [
-            [InlineKeyboardButton("Послуги для чоловіків", callback_data="gender_men")],
-            [InlineKeyboardButton("послуги для жінок", callback_data="gender_women")]
+            [KeyboardButton("Поділитись контактом", request_contact=True)],
         ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text('Оберіть стать:', reply_markup=reply_markup)
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        await update.message.reply_text(
+            "Будь ласка, поділіться вашим контактом для продовження:",
+            reply_markup=reply_markup
+        )
+
+    async def contact_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        contact = update.message.contact
+        user = update.message.from_user
+        client = SessionClient(
+            telegram_id=str(user.id),
+            name=f"{user.first_name} {user.last_name if user.last_name else ''}".strip(),
+            phone_number=contact.phone_number,
+            username=user.username
+        )
+        context.user_data['appointment'].client = client
+
+        await update.message.reply_text(
+            f"Дякуємо, {client.name}. Оберіть послугу:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("Послуги для чоловіків", callback_data="gender_men")],
+                [InlineKeyboardButton("Послуги для жінок", callback_data="gender_women")]
+            ])
+        )
+
+        await update.message.reply_text(
+            "Ваш контакт було успішно отримано!",
+            reply_markup=ReplyKeyboardRemove()
+        )
+
+        print(client)
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         context.user_data['appointment'] = SessionAppointment()
-        await self.show_menu(update, context)
+        await self.request_contact(update, context)
 
     async def callback_query_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
@@ -240,5 +269,8 @@ class Command(BaseCommand):
         application.add_handler(CommandHandler('services_women', self.services_women))
         application.add_handler(CommandHandler('start', self.start))
         application.add_handler(CallbackQueryHandler(self.callback_query_handler))
+
+        application.add_handler(MessageHandler(filters.CONTACT, self.contact_handler))
+
 
         application.run_polling()

@@ -23,9 +23,9 @@ async def create_calendar_event(calendar_id, appointment):
     end_time = datetime.strptime(f"{appointment.date} {appointment.timeslot.split(' - ')[1]}", '%Y-%m-%d %H:%M')
     timezone = 'Europe/Kiev'
     event = {
-        'summary': appointment.service_name,
+        'summary': f"{appointment.service_name} - {appointment.client.phone_number}",
         'location': 'Saloon5',
-        'description': f"A session of {appointment.service_name} with {appointment.specialist_name}",
+        'description': f"{appointment.service_name} з {appointment.client.phone_number}",
         'start': {
             'dateTime': start_time.isoformat(),
             'timeZone': timezone,
