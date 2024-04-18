@@ -121,11 +121,13 @@ class Command(BaseCommand):
 
         elif data.startswith("confirm_appointment"):
             print("APPOINTMENT CONFIRMED!!!")
+            await query.edit_message_text(text="Дякую, ваш запис підтверджено!")
+            await query.answer()
+
             set_booked_slots(appointment)
 
             specialist = await sync_to_async(Specialist.objects.get)(name=appointment.specialist_name)
             calendar_id = specialist.calendar_id
-
             await create_calendar_event(calendar_id, appointment)
 
         print(f"APPOINTMENT: {context.user_data['appointment']}")
@@ -152,17 +154,27 @@ class Command(BaseCommand):
 
         if appointment.date and appointment.service_name and appointment.specialist_name:
             summary_text = f"\n\nДата: {locale_date}\nЧас: {appointment.timeslot}\nПослуга: {appointment.service_name}\nСпеціаліст: {appointment.specialist_name}"
-            confirm_button = [InlineKeyboardButton("Підтвердити запис", callback_data="confirm_appointment")]
-
             message_text += summary_text
-            buttons.append(confirm_button)
 
-        reply_markup = InlineKeyboardMarkup(buttons)
+            confirm_button = [InlineKeyboardButton("Підтвердити запис", callback_data="confirm_appointment")]
+            keyboard = [confirm_button]
+            reply_markup = InlineKeyboardMarkup(keyboard)
 
-        if update.callback_query:
-            await update.callback_query.edit_message_text(text=message_text, reply_markup=reply_markup)
+            if update.callback_query:
+                await update.callback_query.edit_message_text(text=message_text, reply_markup=None)
+                await update.callback_query.answer()
+                await context.bot.send_message(chat_id=chat_id, text="Натисніть кнопку нижче для підтвердження",
+                                               reply_markup=reply_markup)
+            else:
+                await context.bot.send_message(chat_id=chat_id, text=message_text, reply_markup=reply_markup)
+
         else:
-            await context.bot.send_message(chat_id=chat_id, text=message_text, reply_markup=reply_markup)
+            reply_markup = InlineKeyboardMarkup(buttons)
+            if update.callback_query:
+                await update.callback_query.edit_message_text(text=message_text, reply_markup=reply_markup)
+                await update.callback_query.answer()
+            else:
+                await context.bot.send_message(chat_id=chat_id, text=message_text, reply_markup=reply_markup)
 
     async def show_main_options(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> None:
         buttons = [
