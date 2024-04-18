@@ -1,16 +1,19 @@
 from django.core.management.base import BaseCommand
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, \
     ReplyKeyboardRemove
-from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters, \
+    CallbackContext
 from django.conf import settings
-from booking_bot.models import Service, Specialist
+from booking_bot.models import Service, Specialist, Client, Appointment
 from asgiref.sync import sync_to_async
 from datetime import datetime
 from booking_bot.utils.calendar_utils import show_date_picker
 from booking_bot.utils.common import SessionAppointment, SessionClient
+from booking_bot.utils.db_utils import save_appointment
 from booking_bot.utils.google_sheets import get_available_timeslots, get_cached_data, set_booked_slots
 from booking_bot.utils.google_calendar import create_calendar_event
 from babel.dates import format_date
+from django.utils import timezone
 
 
 class Command(BaseCommand):
@@ -129,6 +132,8 @@ class Command(BaseCommand):
             specialist = await sync_to_async(Specialist.objects.get)(name=appointment.specialist_name)
             calendar_id = specialist.calendar_id
             await create_calendar_event(calendar_id, appointment)
+
+            await save_appointment(appointment)
 
         print(f"APPOINTMENT: {context.user_data['appointment']}")
 
@@ -274,15 +279,26 @@ class Command(BaseCommand):
         else:
             await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup)
 
+    async def list_user_appointments(self, update: Update, context: CallbackContext) -> None:
+        user_id = update.effective_user.id
+
+        appointments = await sync_to_async(list)(Appointment.objects.filter(
+            client__telegram_id=user_id,
+            date_time__gte=timezone.now()
+        ))
+
+        if appointments:
+            for appointment in appointments:
+                appointment_text = await sync_to_async(str)(appointment)
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=appointment_text)
+        else:
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="No appointments found.")
+
     def handle(self, *args, **kwargs) -> None:
         application = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
-
-        application.add_handler(CommandHandler('services_man', self.services_men))
-        application.add_handler(CommandHandler('services_women', self.services_women))
         application.add_handler(CommandHandler('start', self.start))
         application.add_handler(CallbackQueryHandler(self.callback_query_handler))
-
+        application.add_handler(CommandHandler("appointments", self.list_user_appointments))
         application.add_handler(MessageHandler(filters.CONTACT, self.contact_handler))
-
 
         application.run_polling()
