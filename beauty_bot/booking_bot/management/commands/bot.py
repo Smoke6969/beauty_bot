@@ -8,6 +8,7 @@ from datetime import datetime
 from booking_bot.utils.calendar_utils import show_date_picker
 from booking_bot.utils.common import SessionAppointment
 from booking_bot.utils.google_sheets import get_available_timeslots, get_cached_data, set_booked_slots
+from booking_bot.utils.google_calendar import create_calendar_event
 from babel.dates import format_date
 
 
@@ -92,6 +93,11 @@ class Command(BaseCommand):
         elif data.startswith("confirm_appointment"):
             print("APPOINTMENT CONFIRMED!!!")
             set_booked_slots(appointment)
+
+            specialist = await sync_to_async(Specialist.objects.get)(name=appointment.specialist_name)
+            calendar_id = specialist.calendar_id
+
+            await create_calendar_event(calendar_id, appointment)
 
         print(f"APPOINTMENT: {context.user_data['appointment']}")
 

@@ -13,3 +13,4 @@ sqlparse==0.4.4
 tzdata==2024.1
 
 Babel~=2.14.0
+pytz~=2024.1

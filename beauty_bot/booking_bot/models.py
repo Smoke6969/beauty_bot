@@ -21,6 +21,8 @@ class Service(models.Model):
 class Specialist(models.Model):
     name = models.CharField(max_length=100)
     services = models.ManyToManyField(Service, related_name='specialists')
+    email = models.CharField(max_length=100, default='test@gmail.com')
+    calendar_id = models.CharField(max_length=100, default='test@gmail.com')
 
     def __str__(self):
         return f"{self.name}"
