@@ -14,6 +14,9 @@ from booking_bot.utils.google_sheets import get_available_timeslots, get_cached_
 from booking_bot.utils.google_calendar import create_calendar_event
 from babel.dates import format_date
 from django.utils import timezone
+import logging
+
+logger = logging.getLogger('tg_bot')
 
 
 class Command(BaseCommand):
@@ -149,7 +152,7 @@ class Command(BaseCommand):
             await self.show_main_options_with_selection(update, context, chat_id, appointment)
 
         elif data.startswith("confirm_appointment"):
-            print("APPOINTMENT CONFIRMED!!!")
+            logger.info(f"APPOINTMENT CONFIRMED: {context.user_data['appointment']}")
             await query.edit_message_text(text="Дякую, ваш запис підтверджено!")
             await query.answer()
 
@@ -160,8 +163,6 @@ class Command(BaseCommand):
             await create_calendar_event(calendar_id, appointment)
 
             await save_appointment(appointment)
-
-        print(f"APPOINTMENT: {context.user_data['appointment']}")
 
     async def show_main_options_with_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int,
                                                appointment: SessionAppointment):
@@ -240,11 +241,10 @@ class Command(BaseCommand):
 
             services_query = Service.objects.filter(specialists__name__in=available_specialists).distinct()
             services = await sync_to_async(list)(services_query)
-            print(f"Available Services for {selected_timeslot} on {formatted_date}: {services}")
 
         else:
             services = await sync_to_async(list)(Service.objects.all())
-            print("No date/timeslot selected - Showing all services.")
+            logger.info("No date/timeslot selected - Showing all services.")
 
         keyboard = [[InlineKeyboardButton(service.name, callback_data=f"service_{service.id}")] for service in services]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -260,7 +260,6 @@ class Command(BaseCommand):
         if appointment.service_id and not appointment.date:
             service = await sync_to_async(Service.objects.get)(id=appointment.service_id)
             specialists = await sync_to_async(list)(service.specialists.all())
-            print(f"Service ID: {appointment.service_id} - Found Specialists: {specialists}")
 
         elif appointment.date and not appointment.service_id and appointment.timeslot:
             formatted_date = datetime.strptime(appointment.date, '%Y-%m-%d').strftime('%d/%m/%Y')
@@ -276,7 +275,6 @@ class Command(BaseCommand):
                     except Specialist.DoesNotExist:
                         continue
             specialists = available_specialists
-            print(f"Date/Time Selected - Available Specialists: {specialists}")
 
         elif appointment.date and appointment.service_id and appointment.timeslot:
             service = await sync_to_async(Service.objects.get)(id=appointment.service_id)
@@ -290,11 +288,10 @@ class Command(BaseCommand):
                     formatted_date].get(selected_timeslot, False):
                     available_specialists.append(specialist)
             specialists = available_specialists
-            print(f"Date, Service, and Timeslot Selected - Available Specialists: {specialists}")
 
         else:
             specialists = await sync_to_async(list)(Specialist.objects.all())
-            print("No specific filters applied - Showing all specialists.")
+            logger.info("No specific filters applied - Showing all specialists.")
 
         keyboard = [[InlineKeyboardButton(s.name, callback_data=f"specialist_{s.id}")] for s in specialists]
         reply_markup = InlineKeyboardMarkup(keyboard)
