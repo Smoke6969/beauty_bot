@@ -16,8 +16,8 @@ TIMESLOT_HEADERS = [
 
 
 def get_sheet_service():
-    creds = Credentials.from_service_account_file(
-        settings.BASE_DIR / 'secrets' / 'google-sheets-api.json',
+    creds = Credentials.from_service_account_info(
+        settings.GOOGLE_SHEETS_CREDS,
         scopes=['https://www.googleapis.com/auth/spreadsheets']
     )
     service = build('sheets', 'v4', credentials=creds)
