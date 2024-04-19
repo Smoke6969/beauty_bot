@@ -18,9 +18,9 @@ from django.utils import timezone
 
 class Command(BaseCommand):
 
-    async def request_contact(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def request_contact(self, update: Update, context: CallbackContext) -> None:
         keyboard = [
-            [KeyboardButton("Поділитись контактом", request_contact=True)],
+            [KeyboardButton("Поділитися контактом", request_contact=True)],
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
         await update.message.reply_text(
@@ -28,35 +28,61 @@ class Command(BaseCommand):
             reply_markup=reply_markup
         )
 
-    async def contact_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def contact_handler(self, update: Update, context: CallbackContext) -> None:
         contact = update.message.contact
         user = update.message.from_user
-        client = SessionClient(
+
+        client, created = await sync_to_async(Client.objects.update_or_create)(
+            telegram_id=str(user.id),
+            defaults={
+                'name': f"{user.first_name} {user.last_name if user.last_name else ''}".strip(),
+                'phone_number': contact.phone_number,
+                'username': user.username
+            }
+        )
+
+        session_client = SessionClient(
             telegram_id=str(user.id),
             name=f"{user.first_name} {user.last_name if user.last_name else ''}".strip(),
             phone_number=contact.phone_number,
             username=user.username
         )
-        context.user_data['appointment'].client = client
+        context.user_data['appointment'].client = session_client
 
-        await update.message.reply_text(
-            f"Дякуємо, {client.name}. Оберіть послугу:",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("Послуги для чоловіків", callback_data="gender_men")],
-                [InlineKeyboardButton("Послуги для жінок", callback_data="gender_women")]
-            ])
-        )
+        await self.prompt_for_service(update, context, session_client.name)
 
         await update.message.reply_text(
             "Ваш контакт було успішно отримано!",
             reply_markup=ReplyKeyboardRemove()
         )
 
-        print(client)
+    async def start(self, update: Update, context: CallbackContext) -> None:
+        user = update.message.from_user
+        telegram_id = str(user.id)
 
-    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        context.user_data['appointment'] = SessionAppointment()
-        await self.request_contact(update, context)
+        try:
+            client = await sync_to_async(Client.objects.get)(telegram_id=telegram_id)
+            session_client = SessionClient(
+                telegram_id=client.telegram_id,
+                name=client.name,
+                phone_number=client.phone_number,
+                username=client.username
+            )
+            context.user_data['appointment'] = SessionAppointment()
+            context.user_data['appointment'].client = session_client
+            await self.prompt_for_service(update, context, session_client.name)
+        except Client.DoesNotExist:
+            context.user_data['appointment'] = SessionAppointment()
+            await self.request_contact(update, context)
+
+    async def prompt_for_service(self, update: Update, context: CallbackContext, client_name: str) -> None:
+        await update.message.reply_text(
+            f"Дякуємо, {client_name}. Будь ласка, оберіть послугу:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("Послуги для чоловіків", callback_data="gender_men")],
+                [InlineKeyboardButton("Послуги для жінок", callback_data="gender_women")]
+            ])
+        )
 
     async def callback_query_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
