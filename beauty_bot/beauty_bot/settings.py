@@ -89,10 +89,15 @@ WSGI_APPLICATION = 'beauty_bot.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'mybotdb',
+        'USER': 'postgres',
+        'PASSWORD': '2239Slipknot',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
+
 
 LOGGING = {
     'version': 1,
