@@ -35,9 +35,8 @@ STATICFILES_FINDERS = [
 SECRET_KEY = 'django-insecure-284%or#eo&j)$-u%_q&xvz=(wy=pbhxb*)(8@ri2j@ily1pwt5'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
+DEBUG = False
+ALLOWED_HOSTS = ['*']
 
 TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN')
 GOOGLE_SHEET_ID = config('GOOGLE_SHEET_ID')
@@ -55,6 +54,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -63,6 +63,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 ROOT_URLCONF = 'beauty_bot.urls'
 
@@ -87,17 +89,11 @@ WSGI_APPLICATION = 'beauty_bot.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'mybotdb',
-        'USER': 'postgres',
-        'PASSWORD': '2239Slipknot',
-        'HOST': 'localhost',
-        'PORT': '5432',
-    }
-}
+import dj_database_url
 
+DATABASES = {
+    'default': dj_database_url.config(default='postgres://localhost/dbname')
+}
 
 LOGGING = {
     'version': 1,
@@ -117,7 +113,7 @@ LOGGING = {
             'level': 'DEBUG',
             'class': 'logging.handlers.RotatingFileHandler',
             'filename': os.path.join(BASE_DIR, 'logs/app.log'),
-            'maxBytes': 1024*1024*5,
+            'maxBytes': 1024 * 1024 * 5,
             'backupCount': 5,
             'formatter': 'verbose',
             'encoding': 'utf-8'
