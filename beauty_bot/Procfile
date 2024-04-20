@@ -1,2 +1,1 @@
-web: gunicorn beauty_bot.wsgi:application
-
+web: gunicorn beauty_bot.wsgi:application --log-file -
