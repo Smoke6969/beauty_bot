@@ -95,6 +95,8 @@ DATABASES = {
     'default': dj_database_url.config(default='postgres://localhost/dbname')
 }
 
+import os
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -109,34 +111,26 @@ LOGGING = {
         },
     },
     'handlers': {
-        'file': {
-            'level': 'DEBUG',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs/app.log'),
-            'maxBytes': 1024 * 1024 * 5,
-            'backupCount': 5,
-            'formatter': 'verbose',
-            'encoding': 'utf-8'
-        },
         'console': {
-            'level': 'INFO',
+            'level': 'DEBUG',  # Set to DEBUG to capture all logs
             'class': 'logging.StreamHandler',
-            'formatter': 'simple'
+            'formatter': 'verbose'  # Use verbose formatter for detailed logs, or switch to 'simple' if preferred
         },
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG',
+            'handlers': ['console'],
+            'level': 'DEBUG',  # Adjust the level as needed
             'propagate': True,
         },
         'tg_bot': {
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG',
-            'propagate': False,
+            'handlers': ['console'],
+            'level': 'DEBUG',  # Adjust the level as needed
+            'propagate': False,  # Prevents log messages from being propagated to the root logger
         },
     }
 }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
